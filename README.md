@@ -1,3 +1,5 @@
+Estou inciando os estudos para KCA, sou uma pesoa onde preciso escrever para conseguir guardar mais os conteúdos. Com isso o material abaixo foi retirado de vários sites, os links estão na opção referências.
+
 # Kubernetes
 
 ## Sumário
@@ -8,7 +10,21 @@
   - [o que é?](#o-que-é?)
   - [K8s](#k8s)
   - [Por que você precisa do K8s?](#por-que-você-precisa-do-k8s?)
-  - [Componentes do K8s](#componentes-do-k8s)
+  - [Arquitetura do K8s](#arquitetura-do-K8s)
+    - [Componentes do cluster Kubernetes](#componentes-do-cluster-kubernetes)
+        - [Master node](#master-node)
+            - [API Server](#api-server)
+            - [Key-Value Store (etcd)](#key-value-store-(etcd))
+            - [Controller](#controller)
+            - [Scheduler](#scheduler)
+        - [Worker Node](#worker-node)
+            - [Kubelet](#kubelet)
+            - [Container Runtime](#container-runtime)
+            - [Kube-proxy](#kube-proxy)
+            - [Pod](#pod)
+            - [Kubernetes services](#kubernetes-services)
+                - [Como funcionam Kubernetes services](#como-funcionam-kubernetes-services)
+  - [Referências](#referências)
 
 <!-- TOC -->
 
@@ -35,4 +51,115 @@ O K8s oferece a você:
 - Autocorreção
 - Gerenciamento de configuração e segredos
 
-## Componentes do K8s
+## Arquitetura do K8s
+
+Um cluster K8s é dividido em duas partes, o plano de controle e em um conjunto de máquinas de processamento, chamados nós que executam aplicações containerizadas. Todo cluster possui ao menos um servidor de processamento (worker node)
+
+O design de um cluster Kubernetes é baseado em três princípios:
+
+- Seguro: seguir as práticas recomendadas de segurança mais avançada
+- Fácil de usar: alguns comandos são suficiente para opera-lo
+- Extensível: ele não deve favorecer um fornecedor e precisa ser personalizável por meio de um arquivo de configuração
+
+
+### Componentes do cluster Kubernetes
+
+Estas etapas ilustram o processo básico do K8s
+
+1 - Um administrador cria e coloca o estado desejado de um aplicativo em um arquivo de manifesto.
+2 - O arquivo é fornecido ao servidor da API do K8s usando linha de comando ou UI. A ferramenta de linha de comando padrão do kubernetes é o kubectl
+3 - O Kubernetes armazena o arquivo (o estado desejado de um aplicativo) em um banco de dados chamado Key-Value Store (etcd)
+4 - O kubernetes então implementa o estado desejado em todos os aplicativos relevantes dentro do cluster
+5 - O k8s monitora então continuamente os elementos do cluster para garantir que o estado atual do aplicativo não altere do estado desejado
+
+| ![Arquitetura Kubernetes](images/full-kubernetes-model-architecture.png) |
+|:---------------------------------------------------------------------------------------------:|
+| *Arquitetura Kubernetes [Ref: phoenixnap.com KB article](https://phoenixnap.com/kb/understanding-kubernetes-architecture-diagrams)* 
+
+
+
+### Master node
+
+O master node recebe a entrada de uma CLI (interface de linha de comando) ou UI (interface de usuário) por meio de uma API. Você pode definir pods, conjuntos de réplicas e serviços que deseja que o kubernetes mantenha. Por exemplo, qual imagem de container usar, qual portas expor e quantas réplicas de pod executar.
+
+| ![Master node](images/kubernetes-master-elements.png) |
+|:---------------------------------------------------------------------------------------------:|
+| *Master node [Ref: phoenixnap.com KB article](https://phoenixnap.com/kb/understanding-kubernetes-architecture-diagrams)* 
+
+### API Server
+
+A API do k8s é o front-end do plano de controle e o único componente que interagimos diretamente. Os componentes internos do sistema, bem como os componentes externos do usuário, comunicam-se por meio da mesma API.
+
+### Key-Value Store (etcd)
+
+O etcd é um banco de dados que o kubernetes usa para fazer backup de todos os dados do cluster. Ele armazena toda configuração e o estado do cluster. O master node consulta o etcd para recuperar parâmetros para o estado dos nós, pods e containers.
+
+### Controller
+
+O controller tem a função de obter o estado desejado da API server. Ele verifica o estado atual dos nós que tem a tarefa de controlar, determinar se há diferenças e as resolver, se houver.
+
+### Scheduler
+
+O scheduler monitora novas solicitações provenientes da API e as atribui a nós íntegros. Ele classifica a qualidade dos nós e implanta pods no nó mais adequado. Se não houver nós adequados, os pods serão colocados em um estado pendente até que esse nó apareça.
+
+
+### Worker Node
+
+Os Worker Node escutam o API server para novas atribuições de trabalho; eles executam as atribuições de trabalho, e em seguida relatam os resultados de volta ao master node.
+
+| ![Worker Node](images/components-worker-node-kubernetes.png) |
+|:---------------------------------------------------------------------------------------------:|
+| *Worker Node [Ref: phoenixnap.com KB article](https://phoenixnap.com/kb/understanding-kubernetes-architecture-diagrams)* 
+
+
+### Kubelet
+
+O kubelet é executado em todos os nós do cluster, é o principal agente do kubernets. Ao instalar o kubelet, a CPU, RAM e armazenamento do nó tornan-se parte do cluster. Ele observa as tarefas enviadas da API, executa a tarefa e informa o master. Ele também monitora os pods e informa o painel de controle se um pod não estiver totalmente funcional. Com base nessas informações o master pode então decidir como alocar tarefas e recursos para atingir o estado desejado.
+
+### Container Runtime
+
+O container runtime extrai imagens de um container image registry e incia e interrompe os containers.
+
+### Kube-proxy
+
+O Kube-proxy garante que cada nó obtenha seu endereço de IP, implementa iptables local e regras para lidar com roteamento e balanceamento de carga de tráfego.
+
+### Pod
+
+Um pod é o menor elemento do kubernetes, sem ele um container não pode fazer parte de um cluster. Se você precisar dimensionar seu aplicativo, só poderá fazer isso adicionando ou removendo pods.
+
+O pod serve como um "wrapper" para um único container com código do aplicativo. Com base na disponibilidade de recursos, o master programa o pod em um nó específico e coordena com o container runtime para iniciar o container
+
+| ![Pod](images/container-pod-deplyment-kubernetes.png) |
+|:---------------------------------------------------------------------------------------------:|
+| *Pod [Ref: phoenixnap.com KB article](https://phoenixnap.com/kb/understanding-kubernetes-architecture-diagrams)* 
+
+Nos casos em que os pods falham inesperadamente ao realizar suas tarefas, o k8s não tenta corrigi-los. Em vez disso, ele cria e incia um novo pod em seu lugar. Esse novo pod é uma réplica, exceto para o DNS e o endereço de IP. Esse recurso teve um impcto profundo em como os desenvolvedores projetam aplicativos.
+
+Devido à natureza flexível da arquitetura do kubernetes, os aplicativos não precisam mais estar vinculados a uma instância específica de um pod. Em vez disso, os aplicativos precisam ser projetados para que um pod interamente novo, criado em qualquer lugar dentro do cluster, possa perfeitamente tomar seu lugar. Para ajudar nesse processo, o kubernetes utiliza serviços.
+
+## Kubernetes services
+
+Os pods não são constantes, como falamos anteriormente. Um dos melhores recursos que o kubernetes oferece é que pods que não funcionam são substituídos por novos automaticamente.
+
+No entanto, esse novos pods têm um conjunto diferente de IPs. Isso pode levar a problemas de processamento e rotatividade de IP, pois os IPs não correspondem mais. Se deixada sem supervisão, essa propriedade tornaria os pods altamentes não confiáveis.
+
+Os serviços são introduzidos para fornecer rede confiável, trazendo endereços de IP e nomes DNS estáveis para o mundo instável dos pods.
+
+Ao controlar o tráfego que entra e sai do pod, um serviço kubernetes fornece um ponto de extremidade de rede estável - um IP, DNS e porta fixos. Por meio de um serviço, qualquer pod pode ser adicionado ou removido sem o medo de que as informações básicas da rede mudem de alguma forma.
+
+### Como funcionam Kubernetes services
+
+Os pods são associados a serviços por meio de pares de valores chaves chamados label e selectors. Um serviço descobre automaticamente um novo pod com label que correspondem ao selector.
+
+Esse processo adiciona perfeitamente novos pods ao serviço e, ao mesmo tempo, remove pods encerrando o cluster.
+
+Por exemplo, se o estado desejado incluir três réplicas de um pod e um nó executando uma réplica falhar, o estado atual será reduzido para dois pods. kubernetes observa que o estado desejado são de três pods. Em seguida, ele agenda uma nova réplica para ocupar o lugar do pod com falha e a atribui a outro nó no cluster.
+
+O mesmo se aplica ao atualizar ou dimensionar o aplicativo adicionando ou removendo pods. Depois de atualizar o estado desejado, o k8s percebe a discrepância e adiciona ou remove pods para corresponder ao arquivo de manifesto. O painel de controle do kubernetes registra, implementa e executa loops de reconciliação em segundo plano que verificam continuamente se o ambiente atende aos requisitos definidos pelo usuário.
+
+## Referências
+
+    https://kubernetes.io/pt-br/docs/home/
+    https://www.redhat.com/pt-br/topics/containers/kubernetes-architecture
+    https://phoenixnap.com/kb/understanding-kubernetes-architecture-diagrams
