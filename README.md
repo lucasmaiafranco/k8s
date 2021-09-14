@@ -24,6 +24,12 @@ Estou inciando os estudos para KCA, sou uma pesoa onde preciso escrever para con
             - [Pod](#pod)
             - [Kubernetes services](#kubernetes-services)
                 - [Como funcionam Kubernetes services](#como-funcionam-kubernetes-services)
+  - [Instalação k8s](#instalação-k8s)
+    - [Módulos](#módulos)
+    - [Atualização do SO](#atualização-do-so)
+    - [Instalando Docker](#instalando-docker)
+    - [Instalação do k8s](#instalação-do-k8s)
+  - [Iniciando cluster](#iniciando-cluster)
   - [Referências](#referências)
 
 <!-- TOC -->
@@ -157,6 +163,144 @@ Esse processo adiciona perfeitamente novos pods ao serviço e, ao mesmo tempo, r
 Por exemplo, se o estado desejado incluir três réplicas de um pod e um nó executando uma réplica falhar, o estado atual será reduzido para dois pods. kubernetes observa que o estado desejado são de três pods. Em seguida, ele agenda uma nova réplica para ocupar o lugar do pod com falha e a atribui a outro nó no cluster.
 
 O mesmo se aplica ao atualizar ou dimensionar o aplicativo adicionando ou removendo pods. Depois de atualizar o estado desejado, o k8s percebe a discrepância e adiciona ou remove pods para corresponder ao arquivo de manifesto. O painel de controle do kubernetes registra, implementa e executa loops de reconciliação em segundo plano que verificam continuamente se o ambiente atende aos requisitos definidos pelo usuário.
+
+## Instalação k8s
+
+### Módulos
+
+O k8s necessita de certos módulos do kernel GNU/Linux. Para isso crie o arquivo abaixo
+
+    /etc/modules-load.d/k8s.conf
+
+
+    br_netfilter
+    ip_vs
+    ip_vs_rr
+    ip_vs_sh
+    ip_vs_wrr
+    nf_conntrack_ipv4
+
+### Atualização do SO
+
+Vamos utilizar Debian, segue comando para atualização
+
+    sudo apt update
+
+    sudo apt upgrade -y
+
+### Instalando Docker
+
+    sudo curl -fsSL https://get.docker.com | bash
+
+os próximos comandos são muito importantes, pois garantem que o driver Cgroup do Docker será configurado para o systemd, que é o gerenciador de serviços padrão utilizado pelo Kubernetes.
+
+    cat > /etc/docker/daemon.json <<EOF
+    {
+    "exec-opts": ["native.cgroupdriver=systemd"],
+    "log-driver": "json-file",
+    "log-opts": {
+        "max-size": "100m"
+    },
+    "storage-driver": "overlay2"
+    }
+    EOF
+
+
+    sudo mkdir -p /etc/systemd/system/docker.service.d
+
+Agora basta reiniciar o Docker.
+
+    sudo systemctl daemon-reload
+    sudo systemctl restart docker
+
+Para finalizar, verifique se o driver Cgroup foi corretamente definido.
+
+    docker info | grep -i cgroup
+
+A saída deve ser assim
+
+    lucas@k8s-server01:~$ sudo docker info | grep -i cgroup
+    Cgroup Driver: systemd
+    Cgroup Version: 2
+    cgroupns
+
+### Instalação do k8s
+
+Agora vamos efetuar a adição dos repositórios do k8s e efetuar a instalação do kubeadm
+
+    sudo apt-get update && sudo apt-get install -y apt-transport-https gnupg2
+
+    curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+
+    sudo echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+
+    sudo apt-get update
+
+    sudo apt-get install -y kubelet kubeadm kubectl
+
+Devemos desativar memória swap
+
+    sudo swapoff -a
+
+Também devemos comentar a linha referênte a memória swap no /etc/fstab
+
+
+## Iniciando cluster
+
+Vamos realizar o download das imagens que serão utilizadas
+
+    sudo kubeadm config images pull
+
+Execute o comando abaixo apenas no nó master para inicialização do cluster. Na saída do comando ele deve mostrar qual comando usar nos demais nós do cluster
+
+    sudo kubeadm init
+
+Podemos utilizar a opção --apiserver-advertise-address informando qual IP em que o servidor API deve escutar. Quando este parâmetro não é passado, a interface de rede padrão é utilizada. Opcionalmente você também pode passar o cidr com a opção --pod-network-cidr. O comando ficará assim
+
+    kubeadm init --apiserver-advertise-address 192.168.99.2 --pod-network-cidr 192.168.99.0/24
+
+A saída do comando será algo do tipo
+
+    [WARNING SystemVerification]: docker version is greater than the most recently validated version. Docker version: 18.05.0-ce. Max validated version: 17.03
+    ...
+    To start using your cluster, you need to run the following as a regular user:
+
+    mkdir -p $HOME/.kube
+    sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+    sudo chown $(id -u):$(id -g) $HOME/.kube/config
+    ...
+    kubeadm join --token 39c341.a3bc3c4dd49758d5 IP_DO_MASTER:6443 --discovery-token-ca-cert-hash sha256:37092
+    ...
+
+Caso o servidor possua mais de uma placa de rede, você pode verificar o IP interno do nó do seu cluster com o seguinte comando:
+
+    kubectl describe node server02 | grep InternalIP
+
+A saída será algo do tipo
+
+    InternalIP:  192.168.0.212
+
+Se o IP não for da rede escolhida, você pode ir até o arquivo abaixo e procurar por KUBELET_CONFIG_ARGS e adicionar no final a instrução --node-ip=
+
+    /etc/systemd/system/kubelet.service.d/10-kubeadm.conf 
+
+O trecho alterado irá ficar nesse estilo
+
+    Environment="KUBELET_CONFIG_ARGS=--config=/var/lib/kubelet/config.yaml --node-ip=192.168.99.2"
+
+Salve o arquivo e execute os comandos abaixo para reiniciar as configurações e consequentemente o kubelet
+
+    sudo systemctl daemon-reload
+    sudo systemctl restart kubelet
+
+
+
+
+
+
+
+
+
 
 ## Referências
 
