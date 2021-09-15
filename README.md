@@ -29,7 +29,13 @@ Estou inciando os estudos para KCA, sou uma pesoa onde preciso escrever para con
     - [Atualização do SO](#atualização-do-so)
     - [Instalando Docker](#instalando-docker)
     - [Instalação do k8s](#instalação-do-k8s)
-  - [Iniciando cluster](#iniciando-cluster)
+    - [Iniciando cluster](#iniciando-cluster)
+    - [Verificando o cluster](#verificando-o-cluster)
+  - [Primeiros passos k8s](#primeiros-passos-k8s)
+    - [Informações dos nós](#informações-dos-nós)
+    - [Exibindo token para entrar no cluster](#exibindo-token-para-entrar-no-cluster)
+    - [Namespaces](#namespaces)
+        - [Visualizando namespaces](#visualizando-namespaces)
   - [Referências](#referências)
 
 <!-- TOC -->
@@ -245,7 +251,7 @@ Devemos desativar memória swap
 Também devemos comentar a linha referênte a memória swap no /etc/fstab
 
 
-## Iniciando cluster
+### Iniciando cluster
 
 Vamos realizar o download das imagens que serão utilizadas
 
@@ -293,17 +299,94 @@ Salve o arquivo e execute os comandos abaixo para reiniciar as configurações e
     sudo systemctl daemon-reload
     sudo systemctl restart kubelet
 
+### Verificando o cluster
+
+Para verificar se a instalação está funcionando, e se os nós estão se comunicando, você pode executar o seguinte comando
+
+    kubectl get nodes
 
 
+## Primeiros passos k8s
+
+### Informações dos nós
+
+    kubectl describe node [nome_do_no]
+
+### Exibindo token para entrar no cluster
+
+Para visualizar novamente o token para adicionar novos nós 
+
+    sudo kubeadm token create --print-join-command
+
+### Namespaces
+
+Os namespaces são uma maneira de organizar clusters em subclusters virtuais. Eles podem ser úteis quando diferentes equipes ou projetos compartilham um cluster do Kubernetes. Qualquer número de namespaces é suportado em um cluster, cada um logicamente separado dos outros, mas com a capacidade de se comunicarem uns com os outros.
 
 
+Quando se deve usar vários namespaces do Kubernetes?
+
+Pequenas equipes ou organizações menores podem ficar perfeitamente satisfeitas usando o namespace padrão. Isso é particularmente relevante se não houver necessidade de isolar desenvolvedores ou usuários uns dos outros. No entanto, existem muitos benefícios úteis em ter vários namespaces, incluindo:
+
+- Isolamento: Equipes grandes ou em crescimento podem usar namespaces para isolar seus projetos e microsserviços uns dos outros. As equipes podem reutilizar os mesmos nomes de recursos em diferentes áreas de trabalho sem problemas. Além disso, executar uma ação em itens em uma área de trabalho nunca afeta outras áreas de trabalho.
+
+- Organização: As organizações que usam um único cluster para desenvolvimento, teste e produção podem usar namespaces para ambientes de teste e desenvolvimento. Isso garante que o código de produção não seja afetado por alterações que os desenvolvedores ou testadores fazem em seus próprios namespaces durante o ciclo de vida do aplicativo.
+
+- Permissões: Os namespaces permitem o uso do RBAC do Kubernetes, para que as equipes possam definir funções que agrupam listas de permissões ou habilidades sob um único nome. Isso pode garantir que apenas usuários autorizados tenham acesso aos recursos em um determinado namespace.
+
+- Controle de recursos: Os limites de recursos orientados por política podem ser definidos em namespaces definindo cotas de recursos para utilização de CPU ou memória. Isso pode garantir que cada projeto ou namespace tenha os recursos de que precisa para ser executado e que nenhum namespace monopolize todos os recursos disponíveis.
+
+- Atuação: O uso de namespaces pode ajudar a melhorar o desempenho de um determinado cluster. Se um cluster for separado em vários namespaces para projetos diferentes, a API Kubernetes terá menos itens para pesquisar durante a execução de operações. Isso pode reduzir a latência e acelerar o desempenho geral do aplicativo para cada aplicativo em execução no cluster.
 
 
+Como os pods podem se comunicar entre os namespaces do Kubernetes?
+
+Embora os namespaces sejam separados uns dos outros, eles podem se comunicar facilmente entre si. O diretório de serviço DNS do Kubernetes pode localizar facilmente qualquer serviço pelo nome usando a forma expandida de endereçamento DNS:
+
+<Nome do serviço>. <Nome do namespace> .svc.cluster.local
+
+Simplesmente adicionar o nome do namespace ao nome do serviço fornece acesso aos serviços em qualquer namespace no cluster. Por exemplo, para acessar o serviço de folha de pagamento no namespace de desenvolvimento, você usaria o endereço
+
+folha de pagamento.desenvolvimento
+
+Para acessar o serviço de folha de pagamento no namespace de produção, você usaria:
+
+folha de pagamento.produção
+
+Observe que as políticas de rede podem ser utilizadas opcionalmente para controlar o acesso entre namespaces. Por exemplo, uma política de rede pode permitir ou negar todo o tráfego de outros namespaces. As políticas de rede se aplicam apenas a conexões e não substituem os firewalls que executam a inspeção de pacotes.
 
 
+#### Visualizando namespaces
+
+Você pode listar os namespaces através do comando
+
+    kubectl get namespaces
+
+O K8s começa com 4 namespaces iniciais
+
+- default : o namespace padrão para objetos sem outro namespace
+
+- kube-system : o namespace para objetos criados pelo sistema Kubernetes
+
+- kube-public : Este namespace é criado automaticamente e pode ser lido por todos os usuários (incluindo aqueles não autenticados). Este namespace é principalmente reservado para uso do cluster, no caso de alguns recursos ficarem visíveis e legíveis publicamente em todo o cluster. O aspecto público deste namespace é apenas uma convenção, não um requisito.
+
+- kube-node-lease : Este namespace contém objetos Lease associados a cada nó. As concessões de nó permitem que o kubelet envie pulsações para que o plano de controle possa detectar a falha do nó
+
+
+Vamos listar os pods do namespace kube-system através do comando
+
+    kubectl get pod -n kube-system
+
+É possível listar todos os pods de todos os namespaces com o comando a seguir.
+
+    kubectl get pods --all-namespaces
+
+Há a possibilidade ainda, de utilizar o comando com a opção -o wide, que disponibiliza maiores informações sobre o recurso, inclusive em qual nó o pod está sendo executado. Exemplo:
+
+    kubectl get pods --all-namespaces -o wide
 
 ## Referências
 
     https://kubernetes.io/pt-br/docs/home/
     https://www.redhat.com/pt-br/topics/containers/kubernetes-architecture
     https://phoenixnap.com/kb/understanding-kubernetes-architecture-diagrams
+    https://www.vmware.com/topics/glossary/content/kubernetes-namespace
