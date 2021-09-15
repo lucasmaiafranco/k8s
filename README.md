@@ -37,6 +37,14 @@ Estou inciando os estudos para KCA, sou uma pesoa onde preciso escrever para con
     - [Exibindo token para entrar no cluster](#exibindo-token-para-entrar-no-cluster)
     - [Namespaces](#namespaces)
         - [Visualizando namespaces](#visualizando-namespaces)
+    - [Executando primeiro pod](#executando-primeiro-pod)
+    - [Listando os pods](#listando-os-pods)
+    - [Detalhes sobre o pod](#detalhes-sobre-o-pod)
+    - [Verificar ultimos eventos do cluster](#verificar-ultimos-eventos-do-cluster)
+    - [Removendo pod](#removendo-pod)
+    - [Dump de um objeto em formato YAML](#dump-de-um-objeto-em-formato-yaml)
+    - [Muitas opções](#muitas-opções)
+    - [Expondo o pod](#expondo-o-pod)
   - [Referências](#referências)
 
 <!-- TOC -->
@@ -385,8 +393,178 @@ Há a possibilidade ainda, de utilizar o comando com a opção -o wide, que disp
 
     kubectl get pods --all-namespaces -o wide
 
+### Executando primeiro pod
+
+Vamos iniciar nosso primeiro pod no k8s, para isso executaremos o comando a seguir
+
+    kubectl run nginx --image nginx
+
+### Listando os pods
+
+    kubectl get pods
+
+### Detalhes sobre o pod
+
+    kubectl describe pod nginx
+
+### Verificar ultimos eventos do cluster
+
+Podemos visualizar os ultimos eventos do cluster como: download de imagens, criação e remoção de pods, etc
+
+    kubectl get events
+
+    lucas@k8s-server01:~$ kubectl get events
+    LAST SEEN   TYPE     REASON      OBJECT      MESSAGE
+    4m54s       Normal   Scheduled   pod/nginx   Successfully assigned default/nginx to k8s-server03
+    4m50s       Normal   Pulling     pod/nginx   Pulling image "nginx"
+    4m35s       Normal   Pulled      pod/nginx   Successfully pulled image "nginx" in 15.713839134s
+    4m31s       Normal   Created     pod/nginx   Created container nginx
+    4m31s       Normal   Started     pod/nginx   Started container nginx
+
+
+### Removendo pod
+
+    kubectl delete pod nginx
+
+### Dump de um objeto em formato YAML
+
+Da mesma forma quando estamos trabalhando com stacks no docker swarm, normalmente recursos no k8s são declarados em arquivos YAML ou JSON e depois manipulados através do kubectl.
+
+Para nos poupar o trabalho de escrever o arquivo todo, podemos utilizar como template o dump de um objeto já existente no k8s, como mostramos abaixo
+
+    kubectl get pod nginx -o yaml > meu-primeiro.yaml
+
+Será criado o arquivo meu-primeiro.yaml, resultante da saída do comando kubectl get pod nginx -o yaml
+
+Podemos observar que o arquivo gerado anteriormente reflete ao estado do pod. Nós desejamos utilizar o arquivo como modelo, e sendo assim, podemos apagar as entradas que armazenam dados de estado desse pod, como status e todas as demais configurações que estão específicas nele. O arquivo final ficará com conteúdo semelhante a este
+
+    apiVersion: v1
+    kind: Pod
+    metadata:
+    creationTimestamp: null
+    labels:
+        run: nginx
+    name: nginx
+    spec:
+    containers:
+    - image: nginx
+        name: nginx
+        resources: {}
+    dnsPolicy: ClusterFirst
+    restartPolicy: Always
+    status: {}
+
+Agora vamos remover o pod que criamos anteriormente
+
+    kubectl delete pod nginx
+
+Vamos recriá-lo utilizando o nosso modelo YAML
+
+    kubectl create -f meu-primeiro.yaml
+
+Observe que não necessário passar para o kubectl qual tipo de recurso será criado, pois isso já está contido dentro do arquivo.
+
+Uma outra forma de criar um arquivo template é através da opção --dry-run do kubectl, com o funcionamento ligeiramente diferente dependendo do tipo de recurso que será criado. Exemplos
+
+Para criação do template de um pod
+
+    kubectl run meu-nginx --image nginx --dry-run=client -o yaml > pod-tamplate-nginx.yaml
+
+Para criação de um template de um deployment
+
+    kubectl create deployment meu-nginx --image nginx --dry-run=client -o yaml > deployment-template-nginx.yaml
+
+A vantagem deste método é que não há a necessidade de limpar o arquivo, além de serem apresentadas apenas opções necessárias do recurso
+
+### Muitas opções
+
+O kubectl pode nos ajudar um pouco em relação a quantidade de opções nos comandos. Ele contém a opção explain, que você pode utilizar caso precise de ajuda com alguma opção em específico dos arquivos de recuro. Segue alguns exemplos:
+
+    kubectl explain [recurso]
+
+    kubectl explain [recurso.caminho.para.spec]
+
+    kubectl explain [recurso.caminho.para.spec] --recursive
+
+Exemplos
+
+    kubectl explain deployment
+
+    kubectl explain pod --recursive
+
+    kubectl explain deployment.spec.template.spec
+
+
+### Expondo o pod
+
+Dispositivos fora do cluster, por padrão, não conseguem acessar os pods criados, como é comum em outros sistemas de containers.
+Para expor um pod, execute o comando a seguir:
+
+    kubectl expose pod ngnix
+
+Será apresentada a seguinte mensagem de erro
+
+    error: couldn't find port via --port flag or introspection
+    See 'kubectl expose -h' for help and examples
+
+O erro ocorre devido ao fato do k8s não saber qual é a porta de destino do container que deve ser exposta (no caso, a 80/TCP). Para configurá-la, vamos primeiramente excluir o pod 
+
+    kubectl delete -f meu-primeiro.yaml
+
+Abra agora o arquivo meu-primeiro.yaml e adicione o bloco a seguir
+
+    ...
+    spec:
+        containers:
+        - image: nginx
+            imagePullPolicy: Always
+            ports:
+            - containerPort: 80
+            name: nginx
+            resources: {}
+    ...
+
+Feita a modificação no arquivo, salve-o e crie novamente o pod
+
+    kubectl create -f meu-primeiro.yaml
+
+O comando a seguir cria um objeto do k8s chamado de Service, que é utilizado justamente para expor pods para acesso externo.
+
+    kubectl expose pod nginx
+
+Podemos listar todos os services com o comando a seguir.
+
+    kubectl get services
+
+    lucas@k8s-server01:~$ kubectl get services
+    NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)   AGE
+    kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP   16h
+    nginx        ClusterIP   10.102.100.91   <none>        80/TCP    27s
+
+
+Como podemos observar, há dois services no nosso cluster. O primeiro é para uso do próprio k8s, equanto o segundo foi o que acabamos de criar. Utilizando o curl com o endereço de IP mostrado na coluna CLUSTER-IP, deve nos ser apresentada a tela principal do nginx
+
+Este pod está disponível para acesso a partir de qualquer nó do cluster
+
+### Limpando tudo
+
+Para mostrar todos os recursos recém criados, pode-se utilizar uma das seguintes opções a seguir
+
+    kubectl get all
+
+    kubectl get pod,service
+
+    kubectl get pod,svc
+
+Note que o k8s nos disponibiliza algumas abreviações de seus recursos. Com o tempo você irá se familiar com elas. Para apagar os recursos criados, você pode executar os seguintes comandos.
+
+    kubectl delete -f meu-primeiro.yaml
+
+    kubectl delete service nginx
+
 ## Referências
 
+    https://livro.descomplicandokubernetes.com.br/
     https://kubernetes.io/pt-br/docs/home/
     https://www.redhat.com/pt-br/topics/containers/kubernetes-architecture
     https://phoenixnap.com/kb/understanding-kubernetes-architecture-diagrams
