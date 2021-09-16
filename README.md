@@ -1,6 +1,5 @@
 Estou inciando os estudos para KCA, sou uma pesoa onde preciso escrever para conseguir guardar mais os conteúdos. Com isso o material abaixo foi retirado de vários sites, os links estão na opção referências.
 
-
 # Kubernetes
 
 ## Sumário
